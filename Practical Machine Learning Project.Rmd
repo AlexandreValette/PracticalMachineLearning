@@ -1,0 +1,127 @@
+---
+title: "Practical Machine Learning Project"
+author: "Alexandre VALETTE"
+date: "7/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Executive Summary
+
+After loading and cleaning the data, two models have been fit to the training dataset.
+The Decision Trees model has an accuracy of 80%.
+The Random Forest model has an accuracy above 99%.
+
+So, the Random Forest model has been used to predict the result with the Test Case dataset.
+
+# Data processing
+
+Loading the necessary libraries.
+```{r, echo=TRUE, warning=FALSE, include=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(e1071)
+library(randomForest)
+library(corrplot)
+```
+
+## Reading raw data
+
+Raw data are download directly from an internet website, to the local machine. The data is then read into memory.
+
+```{r, echo=TRUE, cache= TRUE}
+training.url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing.url  <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(training.url, destfile="training.csv")
+download.file(testing.url, destfile="testing.csv")
+```
+
+```{r, echo=TRUE, cache= FALSE}
+training.data <- read.csv("training.csv", na.strings=c("NA",""))
+testing.data <- read.csv("testing.csv", na.strings=c("NA",""))
+```
+## Cleaning data
+
+Raw data presents some useless columns for prediction and some missing values, which are cleaned.
+
+```{r, echo=TRUE}
+# Drop columns with NA values
+training.data <- training.data[,colSums(is.na(training.data)) == 0] 
+testing.data <- testing.data[,colSums(is.na(testing.data)) == 0]
+
+# Remove useless columns for prediction
+drops <- c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","new_window")
+training.data <- training.data[ , !(names(training.data) %in% drops)]
+testing.data <- testing.data[ , !(names(testing.data) %in% drops)]
+
+# Convert "Classe" to factor
+training.data[, 54] <- factor(training.data[, 54])
+testing.data[, 54] <- factor(testing.data[, 54])
+```
+
+
+## Cross validation
+
+The training data is split in two, between the actual training dataset (60%), and a validation dataset (40%).
+```{r, echo=TRUE}
+in.training <- createDataPartition(training.data$classe, p=0.60, list=F)
+validate.data <- training.data[-in.training, ]
+training.data <- training.data[in.training, ]
+```
+
+
+# Data Exploration
+
+Let's first have a look at our data, with the help of a correlation matrix.
+```{r, echo=TRUE}
+corMatrix <- cor(training.data[, -54])
+corrplot(corMatrix, order = "FPC", method = "color", type = "lower", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+```
+
+Some predictors are highly correlated which could lead to an higher variance for our prediction. Let's keep in mind for the future that a possible improvement of our models is to first select less correlated predictors or to apply a PCA analysis.
+
+# Data modelling 
+
+Two models are trained on the training dataset, then test on the validation dataset.
+
+## Decision Trees
+```{r, echo=TRUE}
+set.seed(1)
+fit_dt <- rpart(classe ~ ., data=training.data, method="class")
+fancyRpartPlot(fit_dt)
+```
+
+
+```{r, echo=TRUE}
+predictions_dt <- predict(fit_dt, validate.data, type = "class")
+cm_dt <- confusionMatrix(predictions_dt, validate.data$classe)
+cm_dt
+```
+Accuracy of Decision Trees model is 80%.
+
+## Random Forest
+```{r, echo=TRUE}
+set.seed(1)
+fit_rf <- randomForest(classe ~ ., data=training.data)
+prediction_rm <- predict(fit_rf, validate.data, type = "class")
+cm_rf <- confusionMatrix(prediction_rm, validate.data$classe)
+cm_rf
+```
+Accuracy of Random Forest model is above 99% which is an huge improvement over Decision Trees model.
+This model is choosen for the prediction on the Test Case Dataset.
+
+# Test Case
+
+We apply the Random Forest model to the Test Case dataset.
+```{r, echo=TRUE}
+prediction_testcase <- predict(fit_rf, testing.data, type = "class")
+prediction_testcase
+```
+
